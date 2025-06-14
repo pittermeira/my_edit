@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #000000;
+  --foreground: #00FF00;
+  --muted: hsl(240, 4.8%, 95.9%);
+  --muted-foreground: #00CC00;
+  --popover: #111111;
+  --popover-foreground: #00FF00;
+  --card: #111111;
+  --card-foreground: #00FF00;
+  --border: #333333;
+  --input: #111111;
+  --primary: hsl(262, 83%, 58%);
+  --primary-foreground: hsl(210, 40%, 98%);
+  --secondary: #222222;
+  --secondary-foreground: #00FF00;
+  --accent: #222222;
+  --accent-foreground: #00FF00;
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --ring: #00FF00;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #00FF00;
+  --muted: #111111;
+  --muted-foreground: #00CC00;
+  --popover: #111111;
+  --popover-foreground: #00FF00;
+  --card: #111111;
+  --card-foreground: #00FF00;
+  --border: #333333;
+  --input: #111111;
+  --primary: hsl(262, 83%, 58%);
+  --primary-foreground: hsl(210, 40%, 98%);
+  --secondary: #222222;
+  --secondary-foreground: #00FF00;
+  --accent: #222222;
+  --accent-foreground: #00FF00;
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: #00FF00;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Merriweather', serif;
+  }
+}
+
+/* Custom styles for the editor */
+.editor-textarea {
+  font-family: var(--editor-font, 'Merriweather'), serif;
+  line-height: var(--editor-line-height, 1.75);
+  font-size: var(--editor-font-size, 1.125rem);
+  background-color: var(--editor-bg, #000000) !important;
+  color: var(--editor-text, #00FF00) !important;
+}
+
+.editor-textarea:focus {
+  outline: none;
+}
+
+.editor-textarea::placeholder {
+  color: var(--editor-text, #00FF00);
+  opacity: 0.6;
+}
+
+/* Full height for editor */
+.editor-container {
+  height: calc(100vh - 200px);
+}
+
+.editor-main {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Status indicators */
+.save-indicator {
+  transition: all 0.2s ease-in-out;
+}
+
+/* AI processing indicator */
+.ai-processing {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Theme toggle animations */
+.theme-toggle {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+  backdrop-filter: blur(8px);
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Custom scrollbar for modal content */
+.modal-content {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(240, 3.7%, 15.9%) transparent;
+}
+
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background-color: hsl(240, 3.7%, 15.9%);
+  border-radius: 3px;
+}
+
+.dark .modal-content::-webkit-scrollbar-thumb {
+  background-color: hsl(240, 5%, 64.9%);
+}

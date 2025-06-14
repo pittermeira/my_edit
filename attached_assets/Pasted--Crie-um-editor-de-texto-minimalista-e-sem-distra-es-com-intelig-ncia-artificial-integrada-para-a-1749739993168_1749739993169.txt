@@ -1,0 +1,100 @@
+🚀 Crie um editor de texto minimalista e sem distrações com inteligência artificial integrada para auxiliar na escrita.
+A estrutura do projeto deve conter os seguintes arquivos:
+
+index.html: estrutura do editor.
+
+style.css: visual limpo e responsivo.
+
+script.js: funcionalidades principais.
+
+ai.js: integração com IA (simulada por enquanto).
+
+🎯 Funcionalidades obrigatórias:
+index.html deve conter:
+Um título: “Meu Editor Focado”.
+
+Uma <textarea> central, que ocupa a maior parte da tela.
+
+Um rodapé fixo com:
+
+Contador de palavras.
+
+Contador de caracteres.
+
+Status de salvamento ("Salvando...", "Salvo").
+
+Um botão para alternar entre tema claro e escuro.
+
+Três botões de IA:
+
+Melhorar Texto: seleciona e reescreve trecho com gramática e clareza aprimoradas.
+
+Gerar Resumo: resume todo o texto em até 3 frases.
+
+Sugerir Tags: IA analisa e sugere tags para organização.
+
+style.css:
+Design minimalista.
+
+Fonte serifada: 'Lora' ou 'Merriweather' via Google Fonts.
+
+Modo escuro como padrão, com .light-mode e .dark-mode.
+
+<textarea> sem bordas visíveis, integrada ao fundo.
+
+Rodapé fixo.
+
+script.js:
+Salva conteúdo automaticamente no localStorage após 1 segundo de pausa na digitação.
+
+Carrega conteúdo salvo ao abrir o editor.
+
+Atualiza contadores em tempo real.
+
+Alterna temas claro/escuro e salva a preferência no localStorage.
+
+Mostra status "Salvando..." e depois "Salvo".
+
+ai.js:
+Função callAI(prompt) simula chamada de API (inicialmente com setTimeout para testes).
+
+Funções para:
+
+Melhorar texto selecionado.
+
+Gerar resumo do texto completo.
+
+Sugerir tags automaticamente.
+
+💡 Melhorias Extras a implementar (separadas como fases):
+Fase 1:
+Histórico de versões: snapshots do texto a cada X minutos ou alterações.
+
+Barra de progresso para meta de palavras definida pelo usuário.
+
+Fase 2:
+Sons ambiente para foco (chuva, floresta, cafeteria).
+
+Exportar para .pdf, .md, .docx.
+
+Modo Pomodoro com alertas e controle de produtividade.
+
+Fase 3:
+IA sugere título automaticamente baseado no conteúdo.
+
+IA detecta tom do texto (formal, casual, otimista etc.).
+
+IA expande ideias curtas em parágrafos.
+
+Organização por pastas e tags com sistema de busca.
+
+🔧 Extras (opcional):
+Suporte a Markdown com visualização dinâmica.
+
+Compatível com mobile.
+
+Gravação por voz (Speech-to-Text).
+
+IA motiva o usuário com streaks ou desafios (“Você já escreveu por 5 dias seguidos!”).
+
+✅ No final, o editor deve ser leve, funcional offline (via localStorage), e com recursos IA acessíveis via botões simples e bem integrados à interface.
