@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,9 +40,14 @@ import {
   generateFilename,
 } from "@/utils/fileExport";
 
+// Defina um limite de tamanho para Data URIs a serem renderizados diretamente (ex: 50KB)
+// Imagens maiores que isso serão mostradas como um placeholder de download.
+const MAX_DIRECT_RENDER_BASE64_SIZE = 50 * 1024; // 50 KB
+
 export function TextEditor() {
   const { toast } = useToast();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Alterado para um HTMLDivElement para o contenteditable
+  const editorRef = useRef<HTMLDivElement>(null);
   const [selectedText, setSelectedText] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
@@ -53,48 +58,190 @@ export function TextEditor() {
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isDocumentManagerOpen, setIsDocumentManagerOpen] = useState(false);
   const [isMediaUploadOpen, setIsMediaUploadOpen] = useState(false);
-  const [insertedMedia, setInsertedMedia] = useState<MediaData[]>([]);
 
+  // useTextEditor agora precisa lidar com HTML diretamente
   const {
     content,
     wordCount,
     characterCount,
     isSaving,
     lastSaved,
-    handleContentChange,
+    handleContentChange, // Este será reescrito ou adaptado
     saveContent,
-  } = useTextEditor();
+  } = useTextEditor(); // Este hook também precisará de ajustes.
 
   const { theme, toggleTheme } = useTheme();
   const { improveText, generateSummary, suggestTags, isProcessing } = useAI();
   const {
-    content: undoContent,
+    content: undoRedoContent, // Renomeado para evitar conflito com 'content' do useTextEditor
     canUndo,
     canRedo,
-    updateContent: updateUndoContent,
+    updateContent: updateUndoRedoContent, // Renomeado
     undo,
     redo,
     clearHistory,
-  } = useUndoRedo(content);
-  const preferences = useEditorPreferences();
+  } = useUndoRedo(content); // Passar o content inicial
 
-  // Get primary color from preferences
+  const preferences = useEditorPreferences();
   const primaryColor = preferences.primaryColor || "#7C3BED";
 
-  // Sync undo/redo content with main content
-  useEffect(() => {
-    if (undoContent !== content) {
-      handleContentChange({ target: { value: undoContent } } as any);
+  // --- Adaptação do Input para contenteditable ---
+  const handleEditorInput = useCallback(() => {
+    // Quando o conteúdo do div contenteditable muda
+    if (editorRef.current) {
+      // Captura o innerHTML, que é o conteúdo real (com tags)
+      const newContent = editorRef.current.innerHTML;
+      // Atualiza o estado principal do editor (via useTextEditor)
+      handleContentChange(newContent);
     }
-  }, [undoContent]);
+  }, [handleContentChange]);
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const getVideoMimeType = (filename: string): string => {
+    const ext = filename.split(".").pop()?.toLowerCase();
+    switch (ext) {
+      case "mp4":
+        return "video/mp4";
+      case "webm":
+        return "video/webm";
+      case "ogg":
+        return "video/ogg";
+      case "avi":
+        return "video/x-msvideo";
+      case "mov":
+        return "video/quicktime";
+      default:
+        return "video/mp4";
+    }
+  };
+
+  // Funções de manipulação de mídia (MOVIDAS PARA CIMA PARA CORRIGIR O ERRO)
+  const generateMediaElement = (media: MediaData): string => {
+    const mediaId = `media_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // NOVO: Renderização de imagem/vídeo/arquivo com base no tamanho e tipo
+    // Se for uma imagem e o tamanho for menor ou igual ao limite, renderiza direto.
+    if (
+      media.type === "image" &&
+      media.url.length - media.url.indexOf(",") - 1 <=
+        MAX_DIRECT_RENDER_BASE64_SIZE
+    ) {
+      return `<div class="media-container" data-media-id="${mediaId}">
+<img src="${media.url}" alt="${media.name}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0; display: block; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />
+<div class="media-controls" style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.9); border-radius: 6px; border: 1px solid rgba(0,0,0,0.1);">
+  <span style="font-size: 12px; color: #333; font-weight: 500;">${media.name}</span>
+  <button onclick="downloadMedia('${mediaId}', '${media.url}', '${media.name}')" style="margin-left: 10px; padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500; transition: background 0.2s;">Download</button>
+</div>
+</div>`;
+    }
+    // Para vídeos, PDFs, e AGORA também imagens grandes (que excedem MAX_DIRECT_RENDER_BASE64_SIZE),
+    // use o placeholder de arquivo.
+    else {
+      let icon = "📎"; // Ícone padrão para arquivo
+      let typeLabel = "Arquivo";
+
+      if (media.type === "image") {
+        icon = "🖼️";
+        typeLabel = "Imagem (muito grande)";
+      } else if (media.type === "video") {
+        icon = "🎥"; // Ícone de vídeo
+        typeLabel = "Vídeo";
+      } else if (media.type === "pdf") {
+        icon = "📄";
+        typeLabel = "Documento PDF";
+      }
+
+      return `<div class="media-container" data-media-id="${mediaId}">
+<div style="border: 2px dashed #ccc; padding: 20px; text-align: center; border-radius: 8px; margin: 10px 0; background: rgba(255,255,255,0.5);">
+  <span style="font-size: 24px;">${icon}</span>
+  <p style="margin: 8px 0; font-weight: bold; color: #333;">${media.name}</p>
+  <p style="margin: 4px 0; color: #666; font-size: 12px;">${typeLabel}</p>
+  <button onclick="downloadMedia('${mediaId}', '${media.url}', '${media.name}')" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; transition: background 0.2s;">Download</button>
+</div>
+</div>`;
+    }
+  };
+
+  const handleMediaInsert = useCallback(
+    (mediaData: MediaData) => {
+      // Com contenteditable, inserimos o HTML diretamente no cursor
+      if (editorRef.current) {
+        const mediaElementHtml = generateMediaElement(mediaData);
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents(); // Remove qualquer seleção atual
+
+          // Criar um elemento temporário para converter o HTML em um nó DOM
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = mediaElementHtml;
+          const fragment = document.createDocumentFragment();
+          while (tempDiv.firstChild) {
+            fragment.appendChild(tempDiv.firstChild);
+          }
+
+          range.insertNode(fragment); // Insere o nó HTML
+          range.collapse(false); // Colapsa o range para o final da inserção
+          selection.removeAllRanges();
+          selection.addRange(range); // Move o cursor para o final da mídia inserida
+        } else {
+          // Se não houver seleção, apenas adiciona no final
+          editorRef.current.innerHTML += mediaElementHtml;
+        }
+        // Trigger a atualização de conteúdo para useTextEditor e useUndoRedo
+        handleEditorInput();
+      }
+
+      toast({
+        title: "Mídia adicionada",
+        description: `${mediaData.name} foi inserida no editor.`,
+      });
+    },
+    [handleEditorInput, toast],
+  ); // Adicionado toast como dependência
+
+  // Sincronizar o estado 'content' do useTextEditor com o innerHTML do editorRef
   useEffect(() => {
-    updateUndoContent(content);
+    if (editorRef.current && editorRef.current.innerHTML !== content) {
+      editorRef.current.innerHTML = content;
+    }
   }, [content]);
+
+  // Sincronizar useUndoRedo com o content (se o content for alterado por outras funções, como carregar um documento)
+  useEffect(() => {
+    updateUndoRedoContent(content);
+  }, [content, updateUndoRedoContent]);
+
+  // Sincronizar o undo/redo com o editor
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== undoRedoContent) {
+      editorRef.current.innerHTML = undoRedoContent;
+      // Colocar o cursor no final (ou manter a posição se possível)
+      const range = document.createRange();
+      const sel = window.getSelection();
+      if (editorRef.current.lastChild) {
+        range.setStartAfter(editorRef.current.lastChild);
+      } else {
+        range.setStart(editorRef.current, 0);
+      }
+      range.collapse(true);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  }, [undoRedoContent]);
+  // --- Fim da Adaptação do Input ---
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + S for manual save
+      // Manual save
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         saveContent();
@@ -104,7 +251,7 @@ export function TextEditor() {
         });
       }
 
-      // Ctrl/Cmd + Z for undo
+      // Undo
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         if (canUndo) {
@@ -112,7 +259,7 @@ export function TextEditor() {
         }
       }
 
-      // Ctrl/Cmd + Y or Ctrl/Cmd + Shift + Z for redo
+      // Redo
       if (
         ((e.ctrlKey || e.metaKey) && e.key === "y") ||
         ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "z")
@@ -132,7 +279,7 @@ export function TextEditor() {
         const item = items[i];
 
         if (item.type.indexOf("image") !== -1) {
-          e.preventDefault();
+          e.preventDefault(); // Impedir colagem padrão (que pode não ser um Data URI direto)
           const file = item.getAsFile();
           if (!file) continue;
 
@@ -145,11 +292,7 @@ export function TextEditor() {
               size: file.size,
             };
 
-            // Store in localStorage
-            const mediaKey = `media_${Date.now()}`;
-            localStorage.setItem(mediaKey, JSON.stringify(mediaData));
-
-            handleMediaInsert(mediaData);
+            handleMediaInsert(mediaData); // Usar a função de inserção de mídia
 
             toast({
               title: "Imagem colada",
@@ -166,30 +309,28 @@ export function TextEditor() {
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("paste", handlePaste);
+    // Event listeners no editorRef, não no document global
+    if (editorRef.current) {
+      editorRef.current.addEventListener("keydown", handleKeyDown);
+      editorRef.current.addEventListener("paste", handlePaste);
+    }
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("paste", handlePaste);
+      if (editorRef.current) {
+        editorRef.current.removeEventListener("keydown", handleKeyDown);
+        editorRef.current.removeEventListener("paste", handlePaste);
+      }
     };
-  }, [saveContent, toast, canUndo, canRedo, undo, redo]);
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-    });
-  };
+  }, [saveContent, toast, canUndo, canRedo, undo, redo, handleMediaInsert]);
 
   const handleTextSelection = () => {
-    if (textareaRef.current) {
-      const start = textareaRef.current.selectionStart;
-      const end = textareaRef.current.selectionEnd;
-      const selection = content.substring(start, end);
-      setSelectedText(selection);
+    // Com contenteditable, a seleção é gerenciada pelo navegador
+    // Se precisar da seleção, use window.getSelection()
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      setSelectedText(selection.toString());
+    } else {
+      setSelectedText("");
     }
   };
 
@@ -219,7 +360,7 @@ export function TextEditor() {
   };
 
   const handleGenerateSummary = async () => {
-    if (!content.trim()) {
+    if (!editorRef.current || !editorRef.current.textContent?.trim()) {
       toast({
         title: "Nenhum conteúdo",
         description: "Digite algum conteúdo antes de gerar um resumo.",
@@ -229,7 +370,8 @@ export function TextEditor() {
     }
 
     try {
-      const result = await generateSummary(content);
+      // Usar textContent para o resumo para evitar problemas com HTML na IA
+      const result = await generateSummary(editorRef.current.textContent);
       setModalTitle("Resumo Gerado");
       setModalContent(result);
       setAiResultType("summary");
@@ -244,7 +386,7 @@ export function TextEditor() {
   };
 
   const handleSuggestTags = async () => {
-    if (!content.trim()) {
+    if (!editorRef.current || !editorRef.current.textContent?.trim()) {
       toast({
         title: "Nenhum conteúdo",
         description: "Digite algum conteúdo antes de sugerir tags.",
@@ -254,7 +396,7 @@ export function TextEditor() {
     }
 
     try {
-      const result = await suggestTags(content);
+      const result = await suggestTags(editorRef.current.textContent);
       setModalTitle("Tags Sugeridas");
       setModalContent(result);
       setAiResultType("tags");
@@ -269,19 +411,19 @@ export function TextEditor() {
   };
 
   const handleAcceptSuggestion = () => {
-    if (aiResultType === "improve" && textareaRef.current && selectedText) {
-      const start = textareaRef.current.selectionStart;
-      const end = textareaRef.current.selectionEnd;
-      const beforeSelection = content.substring(0, start);
-      const afterSelection = content.substring(end);
+    if (aiResultType === "improve" && editorRef.current && selectedText) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        // Extrair o texto melhorado
+        const improvedText =
+          modalContent.split('Texto melhorado: "')[1]?.split('"\n')[0] ||
+          selectedText;
 
-      // Extract the improved text from the modal content (simplified approach)
-      const improvedText =
-        modalContent.split('Texto melhorado: "')[1]?.split('"\n')[0] ||
-        selectedText + " [MELHORADO]";
-
-      const newContent = beforeSelection + improvedText + afterSelection;
-      handleContentChange({ target: { value: newContent } } as any);
+        // Substituir a seleção com o novo texto
+        range.deleteContents(); // Remove o texto selecionado
+        range.insertNode(document.createTextNode(improvedText)); // Insere o texto melhorado
+      }
 
       toast({
         title: "Texto substituído",
@@ -308,18 +450,20 @@ export function TextEditor() {
   };
 
   const handleNewDocument = () => {
-    // Always save current content if it exists
-    if (content.trim()) {
-      const savedDoc = saveDocument(content);
+    // Sempre salva o conteúdo atual se existir (lendo do editorRef)
+    if (editorRef.current && editorRef.current.innerHTML.trim()) {
+      const savedDoc = saveDocument(editorRef.current.innerHTML);
       toast({
         title: "Documento salvo",
         description: `"${savedDoc.title}" foi salvo automaticamente.`,
       });
     }
 
-    // Clear editor and start fresh
-    handleContentChange({ target: { value: "" } } as any);
-    clearHistory();
+    // Limpa o editor
+    if (editorRef.current) {
+      editorRef.current.innerHTML = "";
+    }
+    clearHistory(); // Limpa o histórico do undo/redo
 
     toast({
       title: "Novo documento",
@@ -328,16 +472,26 @@ export function TextEditor() {
   };
 
   const handleLoadDocument = (document: any) => {
-    if (content.trim()) {
-      saveDocument(content);
+    // Salva o documento atual antes de carregar um novo
+    if (editorRef.current && editorRef.current.innerHTML.trim()) {
+      saveDocument(editorRef.current.innerHTML);
     }
 
-    handleContentChange({ target: { value: document.content } } as any);
-    clearHistory();
+    // Carrega o novo documento no editor
+    if (editorRef.current) {
+      editorRef.current.innerHTML = document.content;
+    }
+    updateUndoRedoContent(document.content); // Atualiza o histórico com o novo conteúdo
+    clearHistory(); // Limpa o histórico para o novo documento
+
+    toast({
+      title: "Documento carregado",
+      description: `"${document.title}" foi carregado no editor.`,
+    });
   };
 
   const handleDownloadTxt = () => {
-    if (!content.trim()) {
+    if (!editorRef.current || !editorRef.current.textContent?.trim()) {
       toast({
         title: "Nenhum conteúdo",
         description: "Digite algum conteúdo antes de baixar.",
@@ -346,8 +500,8 @@ export function TextEditor() {
       return;
     }
 
-    const filename = generateFilename(content, "txt");
-    downloadTextFile(content, filename);
+    const filename = generateFilename(editorRef.current.textContent, "txt");
+    downloadTextFile(editorRef.current.textContent, filename);
 
     toast({
       title: "Download iniciado",
@@ -356,7 +510,7 @@ export function TextEditor() {
   };
 
   const handleDownloadPdf = () => {
-    if (!content.trim()) {
+    if (!editorRef.current || !editorRef.current.textContent?.trim()) {
       toast({
         title: "Nenhum conteúdo",
         description: "Digite algum conteúdo antes de baixar.",
@@ -365,8 +519,8 @@ export function TextEditor() {
       return;
     }
 
-    const filename = generateFilename(content, "pdf");
-    downloadPDFFile(content, filename);
+    const filename = generateFilename(editorRef.current.textContent, "pdf");
+    downloadPDFFile(editorRef.current.textContent, filename);
 
     toast({
       title: "PDF será gerado",
@@ -374,124 +528,11 @@ export function TextEditor() {
     });
   };
 
-  const handleMediaInsert = (mediaData: MediaData) => {
-    const mediaElement = generateMediaElement(mediaData);
-    const cursorPosition =
-      textareaRef.current?.selectionStart || content.length;
-    const beforeCursor = content.substring(0, cursorPosition);
-    const afterCursor = content.substring(cursorPosition);
-    const newContent =
-      beforeCursor + "\n\n" + mediaElement + "\n\n" + afterCursor;
-    
-    handleContentChange({ target: { value: newContent } } as any);
-    setInsertedMedia((prev) => [...prev, mediaData]);
-    
-    toast({
-      title: "Mídia adicionada",
-      description: `${mediaData.name} foi inserida no editor.`,
-    });
-  };
-
-  const generateMediaElement = (media: MediaData): string => {
-    const mediaId = `media_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    switch (media.type) {
-      case "image":
-        return `<div class="media-container" data-media-id="${mediaId}">
-<img src="${media.url}" alt="${media.name}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0; display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
-</div>`;
-      case "video":
-        return `<div class="media-container" data-media-id="${mediaId}">
-<video controls style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0; display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-  <source src="${media.url}" type="${getVideoMimeType(media.name)}">
-  Seu navegador não suporta vídeo.
-</video>
-<div class="media-controls" style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.9); border-radius: 6px; border: 1px solid rgba(0,0,0,0.1);">
-  <span style="font-size: 12px; color: #333; font-weight: 500;">${media.name}</span>
-  <button onclick="downloadMedia('${mediaId}', '${media.url}', '${media.name}')" style="margin-left: 10px; padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500; transition: background 0.2s;">Download</button>
-</div>
-</div>`;
-      case "pdf":
-        return `<div class="media-container" data-media-id="${mediaId}">
-<div style="border: 2px dashed #ccc; padding: 20px; text-align: center; border-radius: 8px; margin: 10px 0; background: rgba(255,255,255,0.5);">
-  <span style="font-size: 24px;">📄</span>
-  <p style="margin: 8px 0; font-weight: bold; color: #333;">${media.name}</p>
-  <p style="margin: 4px 0; color: #666; font-size: 12px;">Documento PDF</p>
-  <button onclick="downloadMedia('${mediaId}', '${media.url}', '${media.name}')" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; transition: background 0.2s;">Download PDF</button>
-</div>
-</div>`;
-      default:
-        return `<div class="media-container" data-media-id="${mediaId}">
-<div style="border: 2px dashed #ccc; padding: 20px; text-align: center; border-radius: 8px; margin: 10px 0; background: rgba(255,255,255,0.5);">
-  <span style="font-size: 24px;">📎</span>
-  <p style="margin: 8px 0; font-weight: bold; color: #333;">${media.name}</p>
-  <p style="margin: 4px 0; color: #666; font-size: 12px;">Arquivo</p>
-  <button onclick="downloadMedia('${mediaId}', '${media.url}', '${media.name}')" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; transition: background 0.2s;">Download</button>
-</div>
-</div>`;
-    }
-  };
-
-  const getVideoMimeType = (filename: string): string => {
-    const ext = filename.split(".").pop()?.toLowerCase();
-    switch (ext) {
-      case "mp4":
-        return "video/mp4";
-      case "webm":
-        return "video/webm";
-      case "ogg":
-        return "video/ogg";
-      case "avi":
-        return "video/x-msvideo";
-      case "mov":
-        return "video/quicktime";
-      default:
-        return "video/mp4";
-    }
-  };
-
-  // Add global download function to window
-  useEffect(() => {
-    (window as any).downloadMedia = (
-      mediaId: string,
-      url: string,
-      filename: string,
-    ) => {
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    };
-  }, []);
-
-  const renderMediaContent = (): string => {
-    // Don't escape HTML for media containers - render them directly
-    return content
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br>")
-      .replace(
-        /&lt;div class="media-container"(.*?)&gt;([\s\S]*?)&lt;\/div&gt;/g,
-        '<div class="media-container"$1>$2</div>',
-      )
-      .replace(/&lt;img(.*?)&gt;/g, "<img$1>")
-      .replace(
-        /&lt;video(.*?)&gt;([\s\S]*?)&lt;\/video&gt;/g,
-        "<video$1>$2</video>",
-      )
-      .replace(/&lt;source(.*?)&gt;/g, "<source$1>")
-      .replace(
-        /&lt;button(.*?)&gt;([\s\S]*?)&lt;\/button&gt;/g,
-        "<button$1>$2</button>",
-      )
-      .replace(
-        /&lt;span(.*?)&gt;([\s\S]*?)&lt;\/span&gt;/g,
-        "<span$1>$2</span>",
-      )
-      .replace(/&lt;p(.*?)&gt;([\s\S]*?)&lt;\/p&gt;/g, "<p$1>$2</p>");
+  // Com contenteditable, não precisamos de um renderMediaContent complexo para o preview.
+  // O próprio contenteditable div renderiza o HTML diretamente.
+  // Mantemos esta função para depuração, se necessário.
+  const getEditorContentForDisplay = (): string => {
+    return content; // O conteúdo já deve ser HTML válido aqui
   };
 
   const formatLastSaved = () => {
@@ -695,27 +736,16 @@ export function TextEditor() {
       <main className="editor-main flex-1 pt-16 md:pt-20 pb-20 md:pb-24 min-h-0">
         <div className="editor-container h-full p-2 md:p-4">
           <div className="relative h-full">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleContentChange}
-              onSelect={handleTextSelection}
-              placeholder="Comece a escrever aqui... Seu texto será salvo automaticamente."
-              className="editor-textarea w-full h-full resize-none border-none outline-none bg-transparent placeholder:text-muted-foreground relative z-10"
-              style={{ color: "transparent", caretColor: "currentColor" }}
-            />
+            {/* O div contenteditable AGORA É O EDITOR PRINCIPAL */}
             <div
-              className="editor-content-preview absolute top-0 left-0 w-full h-full pointer-events-none p-4"
-              style={{
-                whiteSpace: "pre-wrap",
-                wordWrap: "break-word",
-                fontFamily: "inherit",
-                fontSize: "inherit",
-                lineHeight: "inherit",
-                color: "var(--foreground)",
-                zIndex: 5,
-              }}
-              dangerouslySetInnerHTML={{ __html: renderMediaContent() }}
+              ref={editorRef}
+              contentEditable="true"
+              onInput={handleEditorInput}
+              onSelect={handleTextSelection}
+              // Não precisamos mais do placeholder aqui, o conteúdo inicial será o padrão ou carregado
+              data-placeholder="Comece a escrever aqui... Seu texto será salvo automaticamente."
+              className="editor-contenteditable w-full h-full resize-none border-none outline-none bg-transparent placeholder:text-muted-foreground relative z-10"
+              style={{ caretColor: "currentColor" }} // Cursor deve ser visível
             />
           </div>
         </div>

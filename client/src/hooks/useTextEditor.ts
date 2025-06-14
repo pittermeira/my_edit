@@ -20,13 +20,13 @@ export function useTextEditor(): UseTextEditorReturn {
 
   // Load saved content on mount
   useEffect(() => {
-    const savedContent = localStorage.getItem('editorContent');
-    const savedTime = localStorage.getItem('lastSaveTime');
-    
+    const savedContent = localStorage.getItem("editorContent");
+    const savedTime = localStorage.getItem("lastSaveTime");
+
     if (savedContent) {
       setContent(savedContent);
     }
-    
+
     if (savedTime) {
       setLastSaved(new Date(savedTime));
     }
@@ -36,22 +36,22 @@ export function useTextEditor(): UseTextEditorReturn {
   useEffect(() => {
     const words = content.trim() ? content.trim().split(/\s+/).length : 0;
     const characters = content.length;
-    
+
     setWordCount(words);
     setCharacterCount(characters);
   }, [content]);
 
   const saveContent = useCallback(() => {
-    localStorage.setItem('editorContent', content);
+    localStorage.setItem("editorContent", content);
     const now = new Date();
-    localStorage.setItem('lastSaveTime', now.toISOString());
+    localStorage.setItem("lastSaveTime", now.toISOString());
     setLastSaved(now);
     setIsSaving(false);
   }, [content]);
 
   const scheduleAutoSave = useCallback(() => {
     setIsSaving(true);
-    
+
     if (saveTimeout) {
       clearTimeout(saveTimeout);
     }
@@ -59,14 +59,17 @@ export function useTextEditor(): UseTextEditorReturn {
     const timeout = setTimeout(() => {
       saveContent();
     }, 1000); // 1 second delay
-    
+
     setSaveTimeout(timeout);
   }, [saveTimeout, saveContent]);
 
-  const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
-    scheduleAutoSave();
-  }, [scheduleAutoSave]);
+  const handleContentChange = useCallback(
+    (newValue: string) => {
+      setContent(newValue);
+      scheduleAutoSave();
+    },
+    [scheduleAutoSave],
+  );
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -84,6 +87,6 @@ export function useTextEditor(): UseTextEditorReturn {
     isSaving,
     lastSaved,
     handleContentChange,
-    saveContent
+    saveContent,
   };
 }
