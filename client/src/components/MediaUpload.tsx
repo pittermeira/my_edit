@@ -34,6 +34,7 @@ const ACCEPTED_TYPES = {
 export function MediaUpload({ isOpen, onClose, onMediaInsert }: MediaUploadProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadController, setUploadController] = useState<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -48,12 +49,12 @@ export function MediaUpload({ isOpen, onClose, onMediaInsert }: MediaUploadProps
     const fileType = getFileType(file);
     
     if (!fileType) {
-      return { valid: false, error: 'Tipo de arquivo não suportado' };
+      return { valid: false, error: 'A mídia não é suportada. Tipos aceitos: JPG, PNG, GIF, WebP, MP4, WebM, OGG, AVI, MOV, PDF' };
     }
 
     if (file.size > MAX_FILE_SIZES[fileType]) {
       const maxSizeMB = MAX_FILE_SIZES[fileType] / (1024 * 1024);
-      return { valid: false, error: `Arquivo muito grande. Máximo ${maxSizeMB}MB para ${fileType}` };
+      return { valid: false, error: `A mídia passa do permitido em MB. Máximo ${maxSizeMB}MB para ${fileType === 'image' ? 'imagens' : fileType === 'video' ? 'vídeos' : 'PDFs'}` };
     }
 
     return { valid: true };
@@ -73,12 +74,18 @@ export function MediaUpload({ isOpen, onClose, onMediaInsert }: MediaUploadProps
       return;
     }
 
+    const controller = new AbortController();
+    setUploadController(controller);
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
       // Simulate upload progress
       const progressInterval = setInterval(() => {
+        if (controller.signal.aborted) {
+          clearInterval(progressInterval);
+          return;
+        }
         setUploadProgress(prev => {
           if (prev >= 90) {
             clearInterval(progressInterval);
@@ -108,15 +115,18 @@ export function MediaUpload({ isOpen, onClose, onMediaInsert }: MediaUploadProps
           setUploadProgress(100);
           
           setTimeout(() => {
-            onMediaInsert(mediaData);
-            onClose();
-            setIsUploading(false);
-            setUploadProgress(0);
-            
-            toast({
-              title: "Arquivo carregado",
-              description: `${file.name} foi adicionado ao editor.`,
-            });
+            if (!controller.signal.aborted) {
+              onMediaInsert(mediaData);
+              onClose();
+              setIsUploading(false);
+              setUploadProgress(0);
+              setUploadController(null);
+              
+              toast({
+                title: "Arquivo carregado",
+                description: `${file.name} foi adicionado ao editor.`,
+              });
+            }
           }, 500);
         } catch (error) {
           throw new Error('Falha ao salvar arquivo. Arquivo muito grande.');
@@ -127,20 +137,39 @@ export function MediaUpload({ isOpen, onClose, onMediaInsert }: MediaUploadProps
         throw new Error('Erro ao ler arquivo');
       };
 
-      fileReader.readAsDataURL(file);
+      if (!controller.signal.aborted) {
+        fileReader.readAsDataURL(file);
+      }
     } catch (error) {
-      setIsUploading(false);
-      setUploadProgress(0);
-      toast({
-        title: "Erro no upload",
-        description: error instanceof Error ? error.message : "Falha ao carregar arquivo",
-        variant: "destructive"
-      });
+      if (!controller.signal.aborted) {
+        setIsUploading(false);
+        setUploadProgress(0);
+        setUploadController(null);
+        toast({
+          title: "Erro no upload",
+          description: error instanceof Error ? error.message : "Falha ao carregar arquivo",
+          variant: "destructive"
+        });
+      }
     }
 
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCancelUpload = () => {
+    if (uploadController) {
+      uploadController.abort();
+      setIsUploading(false);
+      setUploadProgress(0);
+      setUploadController(null);
+      
+      toast({
+        title: "Upload cancelado",
+        description: "O upload do arquivo foi cancelado.",
+      });
     }
   };
 
@@ -177,6 +206,17 @@ export function MediaUpload({ isOpen, onClose, onMediaInsert }: MediaUploadProps
               <p className="text-xs text-center text-muted-foreground">
                 {uploadProgress}% concluído
               </p>
+              <div className="flex justify-center">
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  onClick={handleCancelUpload}
+                  className="mt-2"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancelar
+                </Button>
+              </div>
             </div>
           ) : (
             <>

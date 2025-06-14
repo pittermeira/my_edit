@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Trash2, Calendar, FileCheck, Search, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { FileText, Trash2, Calendar, FileCheck, Search, X, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { downloadTextFile, downloadPDFFile, generateFilename } from "@/utils/fileExport";
 
 interface Document {
   id: string;
@@ -15,6 +18,7 @@ interface Document {
   createdAt: Date;
   lastModified: Date;
   wordCount: number;
+  characterCount: number;
 }
 
 interface DocumentManagerProps {
@@ -27,6 +31,10 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
+  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkDownloadFormat, setBulkDownloadFormat] = useState<'txt' | 'pdf' | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -51,21 +59,101 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
       const docs = JSON.parse(saved).map((doc: any) => ({
         ...doc,
         createdAt: new Date(doc.createdAt),
-        lastModified: new Date(doc.lastModified)
+        lastModified: new Date(doc.lastModified),
+        characterCount: doc.characterCount || doc.content.length
       }));
       setDocuments(docs);
     }
   };
 
-  const deleteDocument = (id: string) => {
-    const updatedDocs = documents.filter(doc => doc.id !== id);
+  // Listen for localStorage changes
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'savedDocuments') {
+        loadDocuments();
+      }
+    };
+
+    const handleCustomStorageEvent = () => {
+      loadDocuments();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('documentsUpdated', handleCustomStorageEvent);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('documentsUpdated', handleCustomStorageEvent);
+    };
+  }, []);
+
+  const confirmDeleteDocument = (id: string) => {
+    setDocumentToDelete(id);
+  };
+
+  const deleteDocument = () => {
+    if (!documentToDelete) return;
+    
+    const updatedDocs = documents.filter(doc => doc.id !== documentToDelete);
     setDocuments(updatedDocs);
     localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
+    setDocumentToDelete(null);
     
     toast({
       title: "Documento excluído",
       description: "O documento foi removido permanentemente.",
     });
+  };
+
+  const handleBulkDelete = () => {
+    const updatedDocs = documents.filter(doc => !selectedDocuments.has(doc.id));
+    setDocuments(updatedDocs);
+    localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
+    setSelectedDocuments(new Set());
+    setShowBulkDeleteConfirm(false);
+    
+    toast({
+      title: "Documentos excluídos",
+      description: `${selectedDocuments.size} documento(s) foram removidos permanentemente.`,
+    });
+  };
+
+  const handleBulkDownload = (format: 'txt' | 'pdf') => {
+    const selectedDocs = documents.filter(doc => selectedDocuments.has(doc.id));
+    
+    selectedDocs.forEach(doc => {
+      const filename = generateFilename(doc.content, format);
+      if (format === 'txt') {
+        downloadTextFile(doc.content, filename);
+      } else {
+        downloadPDFFile(doc.content, filename);
+      }
+    });
+
+    toast({
+      title: "Downloads iniciados",
+      description: `${selectedDocs.length} arquivo(s) serão baixados.`,
+    });
+    
+    setSelectedDocuments(new Set());
+  };
+
+  const toggleDocumentSelection = (id: string) => {
+    const newSelection = new Set(selectedDocuments);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedDocuments(newSelection);
+  };
+
+  const selectAllDocuments = () => {
+    if (selectedDocuments.size === filteredDocuments.length) {
+      setSelectedDocuments(new Set());
+    } else {
+      setSelectedDocuments(new Set(filteredDocuments.map(doc => doc.id)));
+    }
   };
 
   const handleLoadDocument = (document: Document) => {
@@ -92,30 +180,78 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Lista de Documentos ({filteredDocuments.length})
+          <DialogTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Lista de Documentos ({filteredDocuments.length})
+            </div>
+            {selectedDocuments.size > 0 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="text-xs"
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Excluir ({selectedDocuments.size})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkDownload('txt')}
+                  className="text-xs"
+                >
+                  <Download className="w-3 h-3 mr-1" />
+                  TXT
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkDownload('pdf')}
+                  className="text-xs"
+                >
+                  <Download className="w-3 h-3 mr-1" />
+                  PDF
+                </Button>
+              </div>
+            )}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Search Bar */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-          <Input
-            placeholder="Pesquisar documentos..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-10"
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-1 top-1/2 transform -translate-y-1/2 p-1 h-auto"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+        {/* Search Bar and Select All */}
+        <div className="space-y-4 mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              placeholder="Pesquisar documentos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-1 top-1/2 transform -translate-y-1/2 p-1 h-auto"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+          
+          {filteredDocuments.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={selectedDocuments.size === filteredDocuments.length && filteredDocuments.length > 0}
+                onCheckedChange={selectAllDocuments}
+                id="select-all"
+              />
+              <label htmlFor="select-all" className="text-sm text-muted-foreground cursor-pointer">
+                Selecionar todos ({filteredDocuments.length})
+              </label>
+            </div>
           )}
         </div>
 
@@ -140,47 +276,63 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
               {filteredDocuments.map((doc) => (
                 <div
                   key={doc.id}
-                  className="border border-border rounded-lg p-4 hover:bg-accent/50 transition-colors"
+                  className={`border border-border rounded-lg p-4 hover:bg-accent/50 transition-colors ${
+                    selectedDocuments.has(doc.id) ? 'bg-accent/30 border-primary' : ''
+                  }`}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold truncate flex-1 mr-2">
-                      {doc.title}
-                    </h3>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleLoadDocument(doc)}
-                        className="text-xs"
-                      >
-                        <FileCheck className="w-3 h-3 mr-1" />
-                        Carregar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deleteDocument(doc.id)}
-                        className="text-xs"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                  <div className="flex items-start gap-3 mb-2">
+                    <Checkbox
+                      checked={selectedDocuments.has(doc.id)}
+                      onCheckedChange={() => toggleDocumentSelection(doc.id)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-semibold truncate flex-1 mr-2">
+                          {doc.title}
+                        </h3>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleLoadDocument(doc)}
+                            className="text-xs"
+                          >
+                            <FileCheck className="w-3 h-3 mr-1" />
+                            Carregar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => confirmDeleteDocument(doc.id)}
+                            className="text-xs"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                        {doc.content.substring(0, 150)}
+                        {doc.content.length > 150 && '...'}
+                      </p>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {formatDate(doc.lastModified)}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {doc.wordCount} palavras
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {doc.characterCount} caracteres
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
-                    {doc.content.substring(0, 150)}
-                    {doc.content.length > 150 && '...'}
-                  </p>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(doc.lastModified)}
-                      </span>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">
-                      {doc.wordCount} palavras
-                    </Badge>
                   </div>
                 </div>
               ))}
@@ -196,12 +348,49 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
           </Button>
         </div>
       </DialogContent>
+
+      {/* Single Delete Confirmation */}
+      <AlertDialog open={!!documentToDelete} onOpenChange={() => setDocumentToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza de que deseja excluir este documento? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteDocument} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation */}
+      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão em Massa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza de que deseja excluir {selectedDocuments.size} documento(s) selecionado(s)? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir Todos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
 
 export function saveDocument(content: string, title?: string): Document {
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
+  const characterCount = content.length;
   const autoTitle = title || generateAutoTitle(content);
   
   const document: Document = {
@@ -210,12 +399,16 @@ export function saveDocument(content: string, title?: string): Document {
     content,
     createdAt: new Date(),
     lastModified: new Date(),
-    wordCount
+    wordCount,
+    characterCount
   };
 
   const existingDocs = JSON.parse(localStorage.getItem('savedDocuments') || '[]');
   const updatedDocs = [...existingDocs, document];
   localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
+
+  // Trigger custom event to update DocumentManager
+  window.dispatchEvent(new CustomEvent('documentsUpdated'));
 
   return document;
 }
