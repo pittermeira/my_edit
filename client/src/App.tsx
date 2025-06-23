@@ -1,15 +1,41 @@
-import { TextEditor } from "./components/TextEditor";
-import { TooltipProvider } from "@/components/ui/tooltip";
+
 import { Toaster } from "@/components/ui/toaster";
+import { TextEditor } from "@/components/TextEditor";
+import { AuthScreen } from "@/components/AuthModal";
+import { useAuth } from "@/hooks/useAuth";
+import { Loader2 } from "lucide-react";
 
 function App() {
-  return (
-    <TooltipProvider>
-      <div className="min-h-screen bg-background text-foreground">
-        <TextEditor />
-        <Toaster />
+  const { user, isAuthenticated, isLoading, login, register } = useAuth();
+
+  // Show loading spinner while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Verificando autenticação...</p>
+        </div>
       </div>
-    </TooltipProvider>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <>
+        <AuthScreen onLogin={login} onRegister={register} />
+        <Toaster />
+      </>
+    );
+  }
+
+  // Show main editor if authenticated
+  return (
+    <>
+      <TextEditor />
+      <Toaster />
+    </>
   );
 }
 

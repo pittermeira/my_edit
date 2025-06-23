@@ -19,6 +19,8 @@ interface Document {
   lastModified: Date;
   wordCount: number;
   characterCount: number;
+  isDeleted?: boolean;
+  deletedAt?: Date;
 }
 
 interface DocumentManagerProps {
@@ -35,6 +37,9 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDownloadFormat, setBulkDownloadFormat] = useState<'txt' | 'pdf' | null>(null);
+  const [showTrash, setShowTrash] = useState(false);
+  const [documentToRestore, setDocumentToRestore] = useState<string | null>(null);
+  const [documentToPermanentDelete, setDocumentToPermanentDelete] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,16 +47,20 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
   }, []);
 
   useEffect(() => {
+    const activeDocuments = showTrash 
+      ? documents.filter(doc => doc.isDeleted) 
+      : documents.filter(doc => !doc.isDeleted);
+
     if (searchQuery.trim() === "") {
-      setFilteredDocuments(documents);
+      setFilteredDocuments(activeDocuments);
     } else {
-      const filtered = documents.filter(doc => 
+      const filtered = activeDocuments.filter(doc => 
         doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         doc.content.toLowerCase().includes(searchQuery.toLowerCase())
       );
       setFilteredDocuments(filtered);
     }
-  }, [documents, searchQuery]);
+  }, [documents, searchQuery, showTrash]);
 
   const loadDocuments = () => {
     const saved = localStorage.getItem('savedDocuments');
@@ -93,34 +102,89 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
 
   const deleteDocument = () => {
     if (!documentToDelete) return;
-    
-    const updatedDocs = documents.filter(doc => doc.id !== documentToDelete);
+
+    const updatedDocs = documents.map(doc => 
+      doc.id === documentToDelete 
+        ? { ...doc, isDeleted: true, deletedAt: new Date() }
+        : doc
+    );
     setDocuments(updatedDocs);
     localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
     setDocumentToDelete(null);
-    
+
     toast({
-      title: "Documento excluído",
-      description: "O documento foi removido permanentemente.",
+      title: "Documento movido para lixeira",
+      description: "O documento pode ser restaurado na lixeira.",
+    });
+  };
+
+  const restoreDocument = () => {
+    if (!documentToRestore) return;
+
+    const updatedDocs = documents.map(doc => 
+      doc.id === documentToRestore 
+        ? { ...doc, isDeleted: false, deletedAt: undefined }
+        : doc
+    );
+    setDocuments(updatedDocs);
+    localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
+    setDocumentToRestore(null);
+
+    toast({
+      title: "Documento restaurado",
+      description: "O documento foi restaurado com sucesso.",
+    });
+  };
+
+  const permanentDeleteDocument = () => {
+    if (!documentToPermanentDelete) return;
+
+    const updatedDocs = documents.filter(doc => doc.id !== documentToPermanentDelete);
+    setDocuments(updatedDocs);
+    localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
+    setDocumentToPermanentDelete(null);
+
+    toast({
+      title: "Documento excluído permanentemente",
+      description: "O documento foi removido definitivamente.",
     });
   };
 
   const handleBulkDelete = () => {
-    const updatedDocs = documents.filter(doc => !selectedDocuments.has(doc.id));
-    setDocuments(updatedDocs);
-    localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
-    setSelectedDocuments(new Set());
-    setShowBulkDeleteConfirm(false);
-    
-    toast({
-      title: "Documentos excluídos",
-      description: `${selectedDocuments.size} documento(s) foram removidos permanentemente.`,
-    });
+    if (showTrash) {
+      // Se estamos na lixeira, excluir permanentemente
+      const updatedDocs = documents.filter(doc => !selectedDocuments.has(doc.id));
+      setDocuments(updatedDocs);
+      localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
+      setSelectedDocuments(new Set());
+      setShowBulkDeleteConfirm(false);
+
+      toast({
+        title: `${selectedDocuments.size} documento(s) excluído(s) permanentemente`,
+        description: "Os documentos foram removidos definitivamente.",
+      });
+    } else {
+      // Se estamos na lista normal, mover para lixeira
+      const updatedDocs = documents.map(doc => 
+        selectedDocuments.has(doc.id) 
+          ? { ...doc, isDeleted: true, deletedAt: new Date() }
+          : doc
+      );
+      setDocuments(updatedDocs);
+      localStorage.setItem('savedDocuments', JSON.stringify(updatedDocs));
+      setSelectedDocuments(new Set());
+      setShowBulkDeleteConfirm(false);
+
+      toast({
+        title: `${selectedDocuments.size} documento(s) movido(s) para lixeira`,
+        description: "Os documentos podem ser restaurados na lixeira.",
+      });
+    }
   };
 
   const handleBulkDownload = (format: 'txt' | 'pdf') => {
     const selectedDocs = documents.filter(doc => selectedDocuments.has(doc.id));
-    
+
     selectedDocs.forEach(doc => {
       const filename = generateFilename(doc.content, format);
       if (format === 'txt') {
@@ -134,7 +198,7 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
       title: "Downloads iniciados",
       description: `${selectedDocs.length} arquivo(s) serão baixados.`,
     });
-    
+
     setSelectedDocuments(new Set());
   };
 
@@ -159,7 +223,7 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
   const handleLoadDocument = (document: Document) => {
     onLoadDocument(document);
     onClose();
-    
+
     toast({
       title: "Documento carregado",
       description: `"${document.title}" foi carregado no editor.`,
@@ -183,8 +247,19 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
           <DialogTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              Lista de Documentos ({filteredDocuments.length})
+              {showTrash ? 'Lixeira' : 'Lista de Documentos'} ({filteredDocuments.length})
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setShowTrash(!showTrash);
+                setSelectedDocuments(new Set());
+              }}
+              className="text-xs"
+            >
+              {showTrash ? 'Ver Documentos' : 'Ver Lixeira'}
+            </Button>
             {selectedDocuments.size > 0 && (
               <div className="flex items-center gap-2">
                 <Button
@@ -240,7 +315,7 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
               </Button>
             )}
           </div>
-          
+
           {filteredDocuments.length > 0 && (
             <div className="flex items-center gap-2">
               <Checkbox
@@ -292,30 +367,53 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
                           {doc.title}
                         </h3>
                         <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleLoadDocument(doc)}
-                            className="text-xs"
-                          >
-                            <FileCheck className="w-3 h-3 mr-1" />
-                            Carregar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => confirmDeleteDocument(doc.id)}
-                            className="text-xs"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                          {!showTrash ? (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => handleLoadDocument(doc)}
+                                className="text-xs"
+                              >
+                                <FileCheck className="w-3 h-3 mr-1" />
+                                Carregar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => confirmDeleteDocument(doc.id)}
+                                className="text-xs"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => setDocumentToRestore(doc.id)}
+                                className="text-xs"
+                              >
+                                Restaurar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => setDocumentToPermanentDelete(doc.id)}
+                                className="text-xs"
+                              >
+                                Excluir
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
-                      
+
                       <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
                         {doc.content.substring(0, 150)}
                         {doc.content.length > 150 && '...'}
                       </p>
-                      
+
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
@@ -341,7 +439,7 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
         </ScrollArea>
 
         <Separator />
-        
+
         <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>
             Fechar
@@ -384,6 +482,42 @@ export function DocumentManager({ isOpen, onClose, onLoadDocument }: DocumentMan
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Restore Confirmation */}
+      <AlertDialog open={!!documentToRestore} onOpenChange={() => setDocumentToRestore(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Restauração</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza de que deseja restaurar este documento? Ele voltará para a lista de documentos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={restoreDocument}>
+              Restaurar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Permanent Delete Confirmation */}
+      <AlertDialog open={!!documentToPermanentDelete} onOpenChange={() => setDocumentToPermanentDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão Permanente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza de que deseja excluir este documento permanentemente? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={permanentDeleteDocument} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir Permanentemente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
@@ -392,7 +526,7 @@ export function saveDocument(content: string, title?: string): Document {
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const characterCount = content.length;
   const autoTitle = title || generateAutoTitle(content);
-  
+
   const document: Document = {
     id: Date.now().toString(),
     title: autoTitle,
@@ -415,12 +549,12 @@ export function saveDocument(content: string, title?: string): Document {
 
 function generateAutoTitle(content: string): string {
   if (!content.trim()) return 'Documento sem título';
-  
+
   const firstLine = content.split('\n')[0].trim();
   if (firstLine.length > 0) {
     return firstLine.length > 50 ? firstLine.substring(0, 47) + '...' : firstLine;
   }
-  
+
   const firstWords = content.trim().split(/\s+/).slice(0, 8).join(' ');
   return firstWords.length > 50 ? firstWords.substring(0, 47) + '...' : firstWords;
 }

@@ -1,265 +1,237 @@
-        @tailwind base;
-        @tailwind components;
-        @tailwind utilities;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-        :root {
-          --background: #000000;
-          --foreground: #00FF00;
-          --muted: hsl(240, 4.8%, 95.9%);
-          --muted-foreground: #00CC00;
-          --popover: #111111;
-          --popover-foreground: #00FF00;
-          --card: #111111;
-          --card-foreground: #00FF00;
-          --border: #333333;
-          --input: #111111;
-          --primary: hsl(262, 83%, 58%);
-          --primary-foreground: hsl(210, 40%, 98%);
-          --secondary: #222222;
-          --secondary-foreground: #00FF00;
-          --accent: #222222;
-          --accent-foreground: #00FF00;
-          --destructive: hsl(0, 84.2%, 60.2%);
-          --destructive-foreground: hsl(210, 40%, 98%);
-          --ring: #00FF00;
-          --radius: 0.5rem;
-        }
+:root {
+  --background: #000000;
+  --foreground: #00FF00;
+  --muted: hsl(240, 4.8%, 95.9%);
+  --muted-foreground: #00CC00;
+  --popover: #111111;
+  --popover-foreground: #00FF00;
+  --card: #111111;
+  --card-foreground: #00FF00;
+  --border: #333333;
+  --input: #111111;
+  --primary: hsl(262, 83%, 58%);
+  --primary-foreground: hsl(210, 40%, 98%);
+  --secondary: #222222;
+  --secondary-foreground: #00FF00;
+  --accent: #222222;
+  --accent-foreground: #00FF00;
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --ring: #00FF00;
+  --radius: 0.5rem;
+}
 
-        .dark {
-          --background: #000000;
-          --foreground: #00FF00;
-          --muted: #111111;
-          --muted-foreground: #00CC00;
-          --popover: #111111;
-          --popover-foreground: #00FF00;
-          --card: #111111;
-          --card-foreground: #00FF00;
-          --border: #333333;
-          --input: #111111;
-          --primary: hsl(262, 83%, 58%);
-          --primary-foreground: hsl(210, 40%, 98%);
-          --secondary: #222222;
-          --secondary-foreground: #00FF00;
-          --accent: #222222;
-          --accent-foreground: #00FF00;
-          --destructive: hsl(0, 62.8%, 30.6%);
-          --destructive-foreground: hsl(0, 0%, 98%);
-          --ring: #00FF00;
-          --radius: 0.5rem;
-        }
+.dark {
+  --background: #000000;
+  --foreground: #00FF00;
+  --muted: #111111;
+  --muted-foreground: #00CC00;
+  --popover: #111111;
+  --popover-foreground: #00FF00;
+  --card: #111111;
+  --card-foreground: #00FF00;
+  --border: #333333;
+  --input: #111111;
+  --primary: hsl(262, 83%, 58%);
+  --primary-foreground: hsl(210, 40%, 98%);
+  --secondary: #222222;
+  --secondary-foreground: #00FF00;
+  --accent: #222222;
+  --accent-foreground: #00FF00;
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: #00FF00;
+  --radius: 0.5rem;
+}
 
-        @layer base {
-          * {
-            @apply border-border;
-          }
+@layer base {
+  * {
+    @apply border-border;
+  }
 
-          body {
-            @apply font-sans antialiased bg-background text-foreground;
-            font-family: 'Merriweather', serif;
-            font-feature-settings: "rlig" 1, "calt" 1;
-          }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Merriweather', serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
 
-          /* Media content styles */
-          .editor-container {
-            position: relative;
-            overflow: hidden;
-          }
+/* Editor styles */
+.editor-container {
+  position: relative;
+  overflow: hidden;
+}
 
-          /* Novo estilo para o div contenteditable */
-          .editor-contenteditable {
-            /* Estilos que antes estavam no textarea, mas agora para o div contenteditable */
-            width: 100%;
-            height: 100%;
-            resize: none;
-            /* contenteditable divs não tem resize por padrão, mas é bom especificar */
-            border: none;
-            outline: none;
-            background: transparent;
-            padding: 1rem;
-            /* Adicionar padding aqui, equivalente ao antigo preview */
-            font-family: var(--editor-font, 'Merriweather'), serif;
-            line-height: var(--editor-line-height, 1.75);
-            font-size: var(--editor-font-size, 1.125rem);
-            color: var(--foreground);
-            /* Cor do texto normal */
-            white-space: pre-wrap;
-            /* Para preservar quebras de linha e espaços */
-            word-wrap: break-word;
-            /* Para quebra de palavras longas */
+.editor-textarea {
+  background: transparent !important;
+  color: transparent !important;
+  caret-color: var(--foreground) !important;
+  font-family: var(--editor-font, 'Merriweather'), serif;
+  line-height: var(--editor-line-height, 1.75);
+  font-size: var(--editor-font-size, 1.125rem);
+  z-index: 20;
+  position: relative;
+}
 
-            /* Placeholder for contenteditable */
-            &:empty:before {
-              content: attr(data-placeholder);
-              color: var(--muted-foreground);
-              opacity: 0.6;
-              pointer-events: none;
-            }
-          }
+.editor-content-preview {
+  pointer-events: none;
+  z-index: 5;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: inherit;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--foreground);
+}
 
-          /* Regras para os elementos de mídia dentro do contenteditable */
-          .editor-contenteditable .media-container {
-            margin: 15px 0;
-            position: relative;
-            display: block;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 10px;
-          }
+/* Fixed header and footer adjustments */
+body {
+  overflow-x: hidden;
+}
 
-          .editor-contenteditable img,
-          .editor-contenteditable video {
-            max-width: 100%;
-            height: auto;
-            display: block;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            margin: 10px 0;
-          }
+.editor-main {
+  overflow-y: auto;
+}
 
-          .editor-contenteditable button {
-            transition: all 0.2s ease;
-            position: relative;
-            padding: 6px 12px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: 500;
-            margin-left: 10px;
-          }
+/* Scrollbar styling */
+.editor-main::-webkit-scrollbar {
+  width: 8px;
+}
 
-          .editor-contenteditable button:hover {
-            background-color: #0056b3;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-          }
+.editor-main::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-          .editor-contenteditable .media-controls {
-            margin-top: 8px;
-            padding: 8px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 6px;
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-          }
+.editor-main::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
 
-          .editor-contenteditable .media-controls span {
-            font-size: 12px;
-            color: #333;
-            font-weight: 500;
-          }
+.editor-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
 
-          /* Fixed header and footer adjustments */
-          body {
-            overflow-x: hidden;
-          }
+/* Dark mode scrollbar */
+.dark .editor-main::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
 
-          .editor-main {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            /* Garante que o conteúdo role */
-          }
+.dark .editor-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+}
 
-          /* Scrollbar styling */
-          .editor-main::-webkit-scrollbar {
-            width: 8px;
-          }
+/* Custom styles for the editor */
+.editor-textarea {
+  font-family: var(--editor-font, 'Merriweather'), serif;
+  line-height: var(--editor-line-height, 1.75);
+  font-size: var(--editor-font-size, 1.125rem);
+  background-color: var(--editor-bg, #000000) !important;
+  color: var(--editor-text, #00FF00) !important;
+}
 
-          .editor-main::-webkit-scrollbar-track {
-            background: transparent;
-          }
+.editor-textarea:focus {
+  outline: none;
+}
 
-          .editor-main::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 4px;
-          }
+.editor-textarea::placeholder {
+  color: var(--editor-text, #00FF00);
+  opacity: 0.6;
+}
 
-          .editor-main::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 0, 0, 0.3);
-          }
+/* Full height for editor */
+.editor-container {
+  height: calc(100vh - 200px);
+}
 
-          /* Dark mode scrollbar */
-          .dark .editor-main::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-          }
+.editor-main {
+  flex: 1;
+  min-height: 0;
+}
 
-          .dark .editor-main::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-          }
-        }
+/* Mobile improvements */
+@media (max-width: 768px) {
+  .editor-container {
+    height: calc(100vh - 180px);
+  }
+  
+  .editor-textarea,
+  .editor-content-preview {
+    font-size: var(--editor-font-size, 1rem) !important;
+    padding: 12px !important;
+  }
+  
+  /* Better mobile button layout */
+  header .flex {
+    flex-wrap: wrap;
+  }
+  
+  /* Modal improvements for mobile */
+  .modal-content {
+    max-height: 70vh;
+  }
+}
 
-        /* Custom styles for the editor */
-        /* Estes estilos foram movidos para .editor-contenteditable */
-        /* .editor-textarea {
-          font-family: var(--editor-font, 'Merriweather'), serif;
-          line-height: var(--editor-line-height, 1.75);
-          font-size: var(--editor-font-size, 1.125rem);
-          background-color: var(--editor-bg, #000000) !important;
-          color: var(--editor-text, #00FF00) !important;
-        } */
+/* Color picker styles */
+.color-picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+}
 
-        .editor-contenteditable:focus {
-          outline: none;
-        }
+/* Status indicators */
+.save-indicator {
+  transition: all 0.2s ease-in-out;
+}
 
-        /* Placeholder para contenteditable (necessita da regra &:empty:before acima) */
-        /* .editor-textarea::placeholder {
-          color: var(--editor-text, #00FF00);
-          opacity: 0.6;
-        } */
+/* AI processing indicator */
+.ai-processing {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 
-        /* Full height for editor */
-        .editor-container {
-          height: calc(100vh - 200px);
-        }
+/* Theme toggle animations */
+.theme-toggle {
+  transition: all 0.2s ease-in-out;
+}
 
+/* Modal backdrop */
+.modal-backdrop {
+  backdrop-filter: blur(8px);
+  background-color: rgba(0, 0, 0, 0.5);
+}
 
-        /* Status indicators */
-        .save-indicator {
-          transition: all 0.2s ease-in-out;
-        }
+/* Custom scrollbar for modal content */
+.modal-content {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(240, 3.7%, 15.9%) transparent;
+}
 
-        /* AI processing indicator */
-        .ai-processing {
-          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+}
 
-        /* Theme toggle animations */
-        .theme-toggle {
-          transition: all 0.2s ease-in-out;
-        }
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-        /* Modal backdrop */
-        .modal-backdrop {
-          backdrop-filter: blur(8px);
-          background-color: rgba(0, 0, 0, 0.5);
-        }
+.modal-content::-webkit-scrollbar-thumb {
+  background-color: hsl(240, 3.7%, 15.9%);
+  border-radius: 3px;
+}
 
-        /* Custom scrollbar for modal content */
-        .modal-content {
-          scrollbar-width: thin;
-          scrollbar-color: hsl(240, 3.7%, 15.9%) transparent;
-        }
-
-        .modal-content::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .modal-content::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .modal-content::-webkit-scrollbar-thumb {
-          background-color: hsl(240, 3.7%, 15.9%);
-          border-radius: 3px;
-        }
-
-        .dark .modal-content::-webkit-scrollbar-thumb {
-          background-color: hsl(240, 5%, 64.9%);
-        }
+.dark .modal-content::-webkit-scrollbar-thumb {
+  background-color: hsl(240, 5%, 64.9%);
+}

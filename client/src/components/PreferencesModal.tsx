@@ -91,11 +91,16 @@ const PRESET_COLORS = {
 export function PreferencesModal({ isOpen, onClose }: PreferencesModalProps) {
   const [preferences, setPreferences] =
     useState<EditorPreferences>(DEFAULT_PREFERENCES);
+  const [previewLineSpacing, setPreviewLineSpacing] = useState<number>(1.75);
 
   useEffect(() => {
     const saved = localStorage.getItem("editorPreferences");
     if (saved) {
-      setPreferences(JSON.parse(saved));
+      const savedPrefs = JSON.parse(saved);
+      setPreferences(savedPrefs);
+      setPreviewLineSpacing(savedPrefs.lineSpacing);
+    } else {
+      setPreviewLineSpacing(1.75);
     }
   }, []);
 
@@ -125,18 +130,21 @@ export function PreferencesModal({ isOpen, onClose }: PreferencesModalProps) {
   };
 
   const handleSave = () => {
-    savePreferences(preferences);
+    const updatedPreferences = { ...preferences, lineSpacing: previewLineSpacing };
+    savePreferences(updatedPreferences);
     onClose();
   };
 
   const handleReset = () => {
+    setPreferences(DEFAULT_PREFERENCES);
+    setPreviewLineSpacing(DEFAULT_PREFERENCES.lineSpacing);
     savePreferences(DEFAULT_PREFERENCES);
     onClose();
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Palette className="w-5 h-5" />
@@ -144,7 +152,7 @@ export function PreferencesModal({ isOpen, onClose }: PreferencesModalProps) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 max-h-[70vh] overflow-y-auto">
           {/* Font Family */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
@@ -192,16 +200,11 @@ export function PreferencesModal({ isOpen, onClose }: PreferencesModalProps) {
               Espaçamento entre Linhas
             </Label>
             <Select
-              value={preferences.lineSpacing.toString()}
-              onValueChange={(value) =>
-                setPreferences((prev) => ({
-                  ...prev,
-                  lineSpacing: parseFloat(value),
-                }))
-              }
+              value={previewLineSpacing.toString()}
+              onValueChange={(value) => setPreviewLineSpacing(parseFloat(value))}
             >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Selecione o espaçamento" />
               </SelectTrigger>
               <SelectContent>
                 {LINE_SPACING_OPTIONS.map((spacing) => (
@@ -214,6 +217,22 @@ export function PreferencesModal({ isOpen, onClose }: PreferencesModalProps) {
                 ))}
               </SelectContent>
             </Select>
+            
+            {/* Preview */}
+            <div className="mt-3 p-3 border rounded-lg bg-muted/20">
+              <p className="text-xs text-muted-foreground mb-2">Preview:</p>
+              <div 
+                className="text-sm"
+                style={{ 
+                  lineHeight: previewLineSpacing.toString(),
+                  fontFamily: preferences.fontFamily
+                }}
+              >
+                Esta é uma linha de exemplo.<br />
+                Esta é outra linha de exemplo.<br />
+                Veja como fica o espaçamento.
+              </div>
+            </div>
           </div>
 
           <Separator />
@@ -361,25 +380,34 @@ export function useEditorPreferences() {
 
   useEffect(() => {
     const saved = localStorage.getItem("editorPreferences");
+    let finalPreferences = DEFAULT_PREFERENCES;
+    
     if (saved) {
       const parsedPreferences = JSON.parse(saved);
-      setPreferences(parsedPreferences);
-
-      // Apply preferences on load
-      const root = document.documentElement;
-      root.style.setProperty("--editor-bg", parsedPreferences.backgroundColor);
-      root.style.setProperty("--editor-text", parsedPreferences.textColor);
-      root.style.setProperty("--editor-font", parsedPreferences.fontFamily);
-      root.style.setProperty(
-        "--editor-font-size",
-        `${parsedPreferences.fontSize}px`,
-      );
-      root.style.setProperty(
-        "--editor-line-height",
-        parsedPreferences.lineSpacing.toString(),
-      );
-      root.style.setProperty("--button-text-color", parsedPreferences.buttonTextColor || "#ffffff");
+      // Ensure all required fields exist with defaults
+      finalPreferences = {
+        ...DEFAULT_PREFERENCES,
+        ...parsedPreferences,
+        lineSpacing: parsedPreferences.lineSpacing || DEFAULT_PREFERENCES.lineSpacing
+      };
     }
+    
+    setPreferences(finalPreferences);
+
+    // Apply preferences on load
+    const root = document.documentElement;
+    root.style.setProperty("--editor-bg", finalPreferences.backgroundColor);
+    root.style.setProperty("--editor-text", finalPreferences.textColor);
+    root.style.setProperty("--editor-font", finalPreferences.fontFamily);
+    root.style.setProperty(
+      "--editor-font-size",
+      `${finalPreferences.fontSize}px`,
+    );
+    root.style.setProperty(
+      "--editor-line-height",
+      finalPreferences.lineSpacing.toString(),
+    );
+    root.style.setProperty("--button-text-color", finalPreferences.buttonTextColor || "#ffffff");
 
     const handlePreferencesChange = (event: CustomEvent<EditorPreferences>) => {
       setPreferences(event.detail);
